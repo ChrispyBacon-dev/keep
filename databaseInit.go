@@ -24,7 +24,8 @@ func InitDB(dbPath string) {
 		friend_code TEXT UNIQUE,
 		bio TEXT DEFAULT 'Just setting up my keep.',
 		status TEXT DEFAULT '🌻',
-		pfp_path TEXT DEFAULT ''
+		pfp_path TEXT DEFAULT '',
+		language_preference TEXT NOT NULL DEFAULT 'en'
 	);`
 	db.Exec(queryUsers)
 
@@ -43,6 +44,7 @@ func InitDB(dbPath string) {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		sender_id INTEGER,
 		receiver_id INTEGER,
+		request_id TEXT DEFAULT NULL,
 		title TEXT,
 		content TEXT,
 		emoji TEXT DEFAULT '💌',
@@ -57,11 +59,34 @@ func InitDB(dbPath string) {
 		image_path TEXT DEFAULT '',
 		latest_reply_user_name TEXT DEFAULT NULL,
 		latest_reply_read BOOLEAN DEFAULT 0,
+
 		FOREIGN KEY(sender_id) REFERENCES users(id),
 		FOREIGN KEY(receiver_id) REFERENCES users(id),
 		FOREIGN KEY(parent_id) REFERENCES letters(id)
 	);`
 	db.Exec(queryLetters)
+
+	queryPushSubscriptions := `
+	CREATE TABLE IF NOT EXISTS push_subscriptions (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL,
+		endpoint TEXT NOT NULL UNIQUE,
+		p256dh TEXT NOT NULL,
+		auth TEXT NOT NULL,
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+		FOREIGN KEY(user_id) REFERENCES users(id)
+	);`
+
+	if _, err := db.Exec(queryPushSubscriptions); err != nil {
+		log.Fatal("Failed creating push_subscriptions table:", err)
+	}
+	if _, err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
+		ON push_subscriptions(user_id)
+	`); err != nil {
+		log.Fatal("Failed creating push subscription index:", err)
+	}
 
 	// Migrations for existing databases
 	db.Exec("ALTER TABLE letters ADD COLUMN is_read BOOLEAN DEFAULT 0")
@@ -69,8 +94,20 @@ func InitDB(dbPath string) {
 	db.Exec("ALTER TABLE letters ADD COLUMN parent_id INTEGER DEFAULT NULL")
 	db.Exec("ALTER TABLE letters ADD COLUMN image_path TEXT DEFAULT ''")
 	db.Exec("ALTER TABLE letters ADD COLUMN read_at DATETIME DEFAULT NULL")
+	db.Exec("ALTER TABLE letters ADD COLUMN latest_reply_user_name TEXT DEFAULT NULL")
+	db.Exec("ALTER TABLE letters ADD COLUMN latest_reply_read BOOLEAN DEFAULT 0")
+	db.Exec("ALTER TABLE letters ADD COLUMN request_id TEXT DEFAULT NULL")
 
 	db.Exec("ALTER TABLE users ADD COLUMN bio TEXT DEFAULT 'Just setting up my keep.'")
 	db.Exec("ALTER TABLE users ADD COLUMN status TEXT DEFAULT '🌻'")
 	db.Exec("ALTER TABLE users ADD COLUMN pfp_path TEXT DEFAULT ''")
+	db.Exec("ALTER TABLE users ADD COLUMN language_preference TEXT NOT NULL DEFAULT 'en'")
+
+	_, err = db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_letters_sender_request
+		ON letters(sender_id, request_id)
+	`)
+	if err != nil {
+		log.Fatal("Failed creating request ID index:", err)
+	}
 }

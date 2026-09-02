@@ -2,13 +2,22 @@ package main
 
 import "time"
 
+type Language string
+
+const (
+	LanguageEN   Language = "en"
+	LanguageDE   Language = "de"
+	LanguageZHTW Language = "zh-TW"
+)
+
 type User struct {
-	ID         int
-	Username   string
-	FriendCode string
-	Bio        string
-	Status     string
-	PfpPath    string
+	ID                 int
+	Username           string
+	FriendCode         string
+	Bio                string
+	Status             string
+	PfpPath            string
+	LanguagePreference Language
 }
 
 type PartnershipInfo struct {
@@ -24,6 +33,7 @@ type Letter struct {
 	ID            int
 	SenderID      int
 	ReceiverID    int
+	RequestID     string
 	Title         string
 	Content       string
 	Emoji         string
@@ -46,3 +56,14 @@ type Letter struct {
 	LatestReplyUsername string
 	LatestReplyRead     bool
 }
+
+type PushSubscription struct {
+	Endpoint string `json:"endpoint"`
+
+	Keys struct {
+		P256DH string `json:"p256dh"`
+		Auth   string `json:"auth"`
+	} `json:"keys"`
+}
+
+//struct for each html data to be passed to the template

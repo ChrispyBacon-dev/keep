@@ -24,8 +24,10 @@ func main() {
 	if dbPath == "" {
 		dbPath = "keep.db"
 	}
+	log.Printf("VAPID subscriber: %q", os.Getenv("VAPID_SUBSCRIBER"))
 
 	InitDB(dbPath)
+	LoadTranslations()
 
 	http.HandleFunc("/", HandleHome)
 	http.HandleFunc("/login", HandleLogin)
@@ -38,7 +40,11 @@ func main() {
 	http.HandleFunc("/letter/ready", HandleReadyLetter)
 	http.HandleFunc("/letter/reply", HandleReplyLetter)
 	http.HandleFunc("/profile/update", HandleUpdateProfile)
+	http.HandleFunc("/notifications/subscribe", HandleNotificationSubscribe)
+	http.HandleFunc("/notifications/test", HandleNotificationTest)
+	http.HandleFunc("/notifications/unsubscribe", HandleNotificationUnsubscribe)
 
+	http.HandleFunc("/service-worker.js", HandleServiceWorker)
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	http.HandleFunc("/uploads/", HandleUpload)
 

@@ -38,11 +38,10 @@ func CheckUserCredentials(username, password string) bool {
 
 func GetUserByUsername(username string) (User, error) {
 	var u User
-	err := db.QueryRow("SELECT id, username, friend_code, bio, status, pfp_path FROM users WHERE username = ?", username).
-		Scan(&u.ID, &u.Username, &u.FriendCode, &u.Bio, &u.Status, &u.PfpPath)
+	err := db.QueryRow("SELECT id, username, friend_code, bio, status, pfp_path, language_preference FROM users WHERE username = ?", username).
+		Scan(&u.ID, &u.Username, &u.FriendCode, &u.Bio, &u.Status, &u.PfpPath, &u.LanguagePreference)
 	return u, err
 }
-
 func GetUserByID(id int) (User, error) {
 	var u User
 	err := db.QueryRow("SELECT id, username, friend_code, bio, status, pfp_path FROM users WHERE id = ?", id).
@@ -94,7 +93,11 @@ func CanUserAccessUpload(imagePath string, userID int) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if userID != senderID && userID != receiverID {
+	if userID == senderID {
+		return true, nil
+	}
+
+	if userID != receiverID {
 		return false, nil
 	}
 
@@ -110,12 +113,12 @@ func CanUserAccessUpload(imagePath string, userID int) (bool, error) {
 	}
 }
 
-func UpdateUserProfile(userID int, bio, status, pfpPath string) error {
+func UpdateUserProfile(userID int, bio, status, pfpPath string, language Language) error {
 	if pfpPath != "" {
-		_, err := db.Exec("UPDATE users SET bio = ?, status = ?, pfp_path = ? WHERE id = ?", bio, status, pfpPath, userID)
+		_, err := db.Exec("UPDATE users SET bio = ?, status = ?, pfp_path = ?, language_preference = ? WHERE id = ?", bio, status, pfpPath, language, userID)
 		return err
 	}
-	_, err := db.Exec("UPDATE users SET bio = ?, status = ? WHERE id = ?", bio, status, userID)
+	_, err := db.Exec("UPDATE users SET bio = ?, status = ?, language_preference = ? WHERE id = ?", bio, status, language, userID)
 	return err
 }
 

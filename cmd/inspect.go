@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -17,7 +18,7 @@ func main() {
 	defer db.Close()
 
 	fmt.Println("========================================")
-	fmt.Println("       KEEP. DATABASE INSPECTOR 🌻      ")
+	fmt.Println("        KEEP. DATABASE INSPECTOR 🌻       ")
 	fmt.Println("========================================")
 
 	// 1. INSPECT USERS
@@ -48,10 +49,27 @@ func main() {
 
 	// 2. INSPECT LETTERS & REPLIES
 	letterRows, err := db.Query(`
-		SELECT id, sender_id, receiver_id, title, content, emoji, 
-		       unlock_type, unlock_at, sender_ready, receiver_ready, 
-		       is_read, created_at, read_at, parent_id, image_path 
-		FROM letters`)
+	SELECT
+		id,
+		sender_id,
+		receiver_id,
+		COALESCE(request_id, 'NULL/EMPTY'),
+		title,
+		content,
+		emoji,
+		unlock_type,
+		unlock_at,
+		sender_ready,
+		receiver_ready,
+		is_read,
+		created_at,
+		read_at,
+		parent_id,
+		image_path,
+		COALESCE(latest_reply_user_name, 'NULL/EMPTY'),
+		latest_reply_read
+	FROM letters
+`)
 	if err != nil {
 		log.Fatal("Failed to query letters:", err)
 	}
@@ -61,23 +79,40 @@ func main() {
 	letterCount := 0
 	for letterRows.Next() {
 		var id, senderID, receiverID int
-		var title, content, emoji, unlockType, imagePath, createdAt string
-		var senderReady, receiverReady, isRead bool
+		var requestID string
+		var title, content, emoji, unlockType, imagePath, createdAt, latestReplyUser string
+		var senderReady, receiverReady, isRead, latestReplyRead bool
 		var unlockAt, readAt sql.NullTime
 		var parentID sql.NullInt64
 
 		err := letterRows.Scan(
-			&id, &senderID, &receiverID, &title, &content, &emoji,
+			&id, &senderID, &receiverID, &requestID, &title, &content, &emoji,
 			&unlockType, &unlockAt, &senderReady, &receiverReady,
 			&isRead, &createdAt, &readAt, &parentID, &imagePath,
+			&latestReplyUser, &latestReplyRead,
 		)
 		if err != nil {
 			log.Println("Error scanning letter:", err)
 			continue
 		}
 
+		// Calculate IsUnlocked identically to GetVaultLetters
+		isUnlocked := false
+		if unlockType == "instant" {
+			isUnlocked = true
+		} else if (unlockType == "date" || unlockType == "random") && unlockAt.Valid {
+			if time.Now().UTC().After(unlockAt.Time) {
+				isUnlocked = true
+			}
+		} else if unlockType == "mutual_ready" {
+			if senderReady && receiverReady {
+				isUnlocked = true
+			}
+		}
+
 		fmt.Printf("Letter ID:  %d %s (Title: %s)\n", id, emoji, title)
-		fmt.Printf("From ID:    %d  --->  To ID: %d\n", senderID, receiverID)
+		fmt.Printf("From ID:    %d   --->   To ID: %d\n", senderID, receiverID)
+		fmt.Printf("UniqueLetterID: %s\n", requestID)
 
 		if parentID.Valid {
 			fmt.Printf("Type:       💬 Reply to Root Letter ID #%d\n", parentID.Int64)
@@ -86,11 +121,11 @@ func main() {
 		}
 
 		fmt.Printf("Content:    %s\n", truncate(content, 50))
-		fmt.Printf("Seal Type:  %s | Read: %t\n", unlockType, isRead)
+		fmt.Printf("Seal Type:  %s | IsUnlocked: %t | Read: %t\n", unlockType, isUnlocked, isRead)
 		fmt.Printf("Created At: %s\n", createdAt)
 
 		if unlockAt.Valid {
-			fmt.Printf("Unlock At:  %s\n", unlockAt.Time.Format("Jan 02, 2006 15:04"))
+			fmt.Printf("Unlock At:  %s (UTC)\n", unlockAt.Time.Format("Jan 02, 2006 15:04"))
 		}
 		if readAt.Valid {
 			fmt.Printf("Read At:    %s\n", readAt.Time.Format("Jan 02, 2006 15:04"))
@@ -98,6 +133,8 @@ func main() {
 		if imagePath != "" {
 			fmt.Printf("Attachment: %s\n", imagePath)
 		}
+
+		fmt.Printf("Latest Reply User: %s | Reply Read: %t\n", latestReplyUser, latestReplyRead)
 		fmt.Println("----------------------------------------")
 		letterCount++
 	}
